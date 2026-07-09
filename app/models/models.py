@@ -14,11 +14,11 @@ class Reviews(SQLModel, table=True):
 
 class Summary(SQLModel, table=True):
     id: int = Field(primary_key=True)
-    course_code: str = Field(max_length=10, nullable=False)
+    course_code: str = Field(max_length=10, nullable=False, unique=True)
     summary: str = Field(nullable=False)
     created_at: datetime = Field(default_factory=datetime.now, nullable=False)
     praises: List[str] = Field(default=[], sa_column=Column(ARRAY(TEXT)))
     complaints: List[str] = Field(default=[], sa_column=Column(ARRAY(TEXT)))
-    difficulty: Optional[float] = Field(maximum=10, nullable=True)
-    workload: Optional[float] = Field(maximum=10, nullable=True)
-    enjoyability: Optional[float] = Field(maximum=10, nullable=True)
+    difficulty: Optional[float] = Field(le=10, nullable=True)
+    workload: Optional[float] = Field(le=10, nullable=True)
+    enjoyability: Optional[float] = Field(le=10, nullable=True)
