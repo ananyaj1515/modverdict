@@ -1,7 +1,12 @@
 
 from datetime import datetime
 import os
+import asyncio
 from dotenv import load_dotenv
+from sqlmodel import Session, select
+from sqlalchemy import func
+from models.models import Reviews, Summary
+from db import engine
 load_dotenv()
 import httpx    
 
@@ -81,5 +86,26 @@ async def get_new_reviews_for_course(course_code: str, since: datetime | None):
         print(f"An error occurred while requesting {e.request.url!r}: {e}")
         return []
 
+async def main():
+    courses = await get_courses_list_for_ay("2026-2027")
+    
+    with Session(engine) as session:
+        for course in courses:
 
+            statement = select(func.max(Reviews.created_at)).where(Reviews.course_code == course)
+            since = session.exec(statement).first()
+            
+            
+            reviews = await get_new_reviews_for_course(course, since)
+            
+            
+            for review in reviews:
+                review_obj = Reviews(**review)
+                session.add(review_obj)
+            
+            
+            session.commit()
+            print(f"Fetched {len(reviews)} reviews for course {course}")
 
+if __name__ == "__main__":
+    asyncio.run(main())
