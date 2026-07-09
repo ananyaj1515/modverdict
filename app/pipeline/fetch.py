@@ -2,6 +2,12 @@
 import httpx
 
 async def get_courses_list_for_ay(academic_year: str):
+    """
+    Fetches the list of courses for a given academic year from the NUSMods API.
+
+    academic_year: str
+        The academic year in the format "YYYY-YYYY" (e.g., "2023-2024").
+    """
     try:
 
         url = f"https://api.nusmods.com/v2/{academic_year}/moduleList.json"
