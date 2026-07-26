@@ -2,7 +2,6 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 import asyncio
-from os import lo
 from app.db import engine
 from sqlmodel import Session, select, col, func
 from app.models.models import Reviews
