@@ -1,9 +1,13 @@
 import os
 from dotenv import load_dotenv
 load_dotenv()
+import re
+import time
+import json_repair
+import json
 from app.db import engine
 from sqlmodel import Session, select, col, func
-from app.models.models import Reviews
+from app.models.models import Reviews, Summary
 from groq import Groq
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
@@ -51,6 +55,27 @@ def get_reviews_for_course(course_code):
         reviews = session.exec(statement).all()
     return reviews
 
+
+
+# helper function
+def parse_llm_json(llm_output: str) -> dict:
+    try:
+        # Step 1: Use regex to extract the text between the first '{' and last '}'
+        match = re.search(r"(\{.*\})", llm_output, re.DOTALL)
+        if not match:
+            raise ValueError("No JSON object found in the LLM response.")
+            
+        json_string = match.group(1)
+        
+        # Step 2: Attempt standard parsing first
+        return json.loads(json_string)
+        
+    except json.JSONDecodeError:
+        # Step 3: Fallback to json_repair if the LLM missed a comma or quote
+        print("Standard parsing failed. Attempting to repair malformed JSON...")
+        return json_repair.loads(json_string)
+
+
 def summarise_course(course_code):
     reviews = get_reviews_for_course(course_code)
     review_string = "\n".join(reviews)
@@ -62,11 +87,36 @@ def summarise_course(course_code):
             {"role": "user", "content": review_string}
         ]
     )
-    print(completion.choices[0].message.content)
+
+    summary_json = parse_llm_json(completion.choices[0].message.content)
+    print(summary_json)
+    return summary_json
+
+def save_course_summary(course_code):
+    with Session(engine) as session:
+        existing = session.exec(select(Summary).where(Summary.course_code == course_code)).first()
+        if existing:
+            print(f"Skipping {course_code} - summary already exists")
+            return
+        summary_json = summarise_course(course_code)
+
+        if summary_json.get("overall_summary") == "Not enough reviews to generate a summary":
+            print(f"Skipping {course_code} - not enough reviews")
+            return
+        
+        summary_obj = Summary(course_code=course_code, **summary_json)
+        session.add(summary_obj)
+        session.commit()
 
 def main():
-    print(summarise_course("CS2040S"))
-
+    course_list = get_courses_list()
+    for course_code in course_list:
+        try:
+            print(f"Summarising {course_code}")
+            save_course_summary(course_code)
+        except Exception as e:
+            print(f"Failed to summarise {course_code}: {e}")
+        time.sleep(5)
 
 if __name__ == "__main__":
     main()
