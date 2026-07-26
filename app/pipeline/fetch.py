@@ -5,8 +5,8 @@ import asyncio
 from dotenv import load_dotenv
 from sqlmodel import Session, select
 from sqlalchemy import func
-from models.models import Reviews, Summary
-from db import engine
+from app.models.models import Reviews
+from app.db import engine
 load_dotenv()
 import httpx    
 
@@ -52,16 +52,16 @@ async def get_new_reviews_for_course(course_code: str, since: datetime | None):
         async with httpx.AsyncClient() as client:
             hasNext = True
             cursor = ""
-            while hasNext:
+            request_count = 0
+            while hasNext: 
                 url = f"https://disqus.com/api/3.0/threads/listPosts.json?api_key={DISQUS_API_KEY}&forum=nusmods-prod&thread:ident={course_code}&cursor={cursor}&since={since.isoformat() if since else ''}"
 
-        
                 response = await client.get(url)
                 response.raise_for_status()
+                request_count += 1
 
                 json_response = response.json()
 
-                
                 for post in json_response["response"]:
                     if not post["isSpam"] and not post["isDeleted"]:
                         posts.append({
@@ -76,36 +76,40 @@ async def get_new_reviews_for_course(course_code: str, since: datetime | None):
                 hasNext = json_response["cursor"]["hasNext"]
                 if hasNext:
                     cursor = json_response["cursor"]["next"]
-        return posts
+        return (posts, request_count)
                 
     except httpx.HTTPStatusError as e:
         print(f"Failed to fetch reviews for {course_code}: {e}")
-        return []
+        return ([], 0)
 
     except httpx.RequestError as e:
         print(f"An error occurred while requesting {e.request.url!r}: {e}")
-        return []
+        return ([], 0)
 
 async def main():
     courses = await get_courses_list_for_ay("2026-2027")
-    
+    request_count = 0
+
     with Session(engine) as session:
         for course in courses:
-
             statement = select(func.max(Reviews.created_at)).where(Reviews.course_code == course)
             since = session.exec(statement).first()
             
-            
-            reviews = await get_new_reviews_for_course(course, since)
-            
-            
+            reviews, req_count = await get_new_reviews_for_course(course, since)
+            request_count += req_count
+
             for review in reviews:
                 review_obj = Reviews(**review)
                 session.add(review_obj)
-            
-            
+                    
             session.commit()
             print(f"Fetched {len(reviews)} reviews for course {course}")
-
+           
+            if request_count >= 1000:
+                print("Reached 1000 requests, stopping to avoid rate limit.")
+                await asyncio.sleep(60*60)  # Sleep for 60 seconds to avoid hitting the rate limit
+                request_count = 0  # Reset request count after sleeping
+            
 if __name__ == "__main__":
     asyncio.run(main())
+    

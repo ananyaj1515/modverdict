@@ -1,12 +1,10 @@
 import os
 from sqlmodel import SQLModel, Session, create_engine
-from models.models import Reviews, Summary
+from app.models.models import Reviews, Summary
 from dotenv import load_dotenv
 load_dotenv()
 
 DATABASE_URL=os.getenv("DATABASE_URL")
-
-
 
 engine = create_engine(DATABASE_URL, echo=True)
 
