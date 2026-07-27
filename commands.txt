@@ -1,0 +1,1 @@
+PYTHONPATH=/Users/ananyajain/modverdict-backend uvicorn app.api.main:app --reload
